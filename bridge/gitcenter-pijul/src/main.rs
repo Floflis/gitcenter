@@ -138,6 +138,8 @@ fn handle_request(config: &Config, request: Request) -> Response {
                 inspect_repository(config, &repository)
             }
             "init" => {
+                // Refuse an incompatible CLI before any filesystem mutation.
+                check_pijul_version(config)?;
                 let repository = resolve_init_target(config, request.repository.as_deref())?;
                 if fs::read_dir(&repository)
                     .map_err(|error| ("filesystem_error", error.to_string()))?
@@ -234,7 +236,7 @@ fn ensure_within_root(root: &Path, path: &Path) -> Result<(), (&'static str, Str
     Ok(())
 }
 
-fn inspect_repository(config: &Config, repository: &Path) -> Result<Value, (&'static str, String)> {
+fn check_pijul_version(config: &Config) -> Result<(), (&'static str, String)> {
     let version = run_pijul(config, ["--version".to_string()])?;
     let version_text = String::from_utf8_lossy(&version.stdout).trim().to_string();
     if !version_text.split_whitespace().any(|part| part == PIJUL_VERSION) {
@@ -242,6 +244,11 @@ fn inspect_repository(config: &Config, repository: &Path) -> Result<Value, (&'st
             "expected Pijul {PIJUL_VERSION}, found: {version_text}"
         )));
     }
+    Ok(())
+}
+
+fn inspect_repository(config: &Config, repository: &Path) -> Result<Value, (&'static str, String)> {
+    check_pijul_version(config)?;
 
     // The documented channel-list command is parsed only inside this adapter.
     let channels_output = run_pijul(config, [
