@@ -161,7 +161,7 @@ function isValidPijulMetadata(metadata) {
 	if(parts.some(part => !part || part == "." || part == ".." || !/^[A-Za-z0-9._-]+$/.test(part))) {
 		return false;
 	}
-	return typeof metadata.pijul_version == "string" && metadata.pijul_version.length > 0;
+	return metadata.state == "registered" && metadata.pijul_version == "1.0.0-beta.24";
 }
 
 class Repository {
