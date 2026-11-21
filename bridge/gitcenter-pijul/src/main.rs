@@ -198,7 +198,7 @@ fn resolve_existing_repository(config: &Config, relative: Option<&str>) -> Resul
 
 fn resolve_init_target(config: &Config, relative: Option<&str>) -> Result<PathBuf, (&'static str, String)> {
     let relative = validate_relative_path(relative)?;
-    if relative.as_os_str().is_empty() {
+    if !relative.components().any(|component| matches!(component, Component::Normal(_))) {
         return Err(("invalid_path", "initialization target must be below the managed root".into()));
     }
 
@@ -237,7 +237,7 @@ fn ensure_within_root(root: &Path, path: &Path) -> Result<(), (&'static str, Str
 fn inspect_repository(config: &Config, repository: &Path) -> Result<Value, (&'static str, String)> {
     let version = run_pijul(config, ["--version".to_string()])?;
     let version_text = String::from_utf8_lossy(&version.stdout).trim().to_string();
-    if !version_text.contains(PIJUL_VERSION) {
+    if !version_text.split_whitespace().any(|part| part == PIJUL_VERSION) {
         return Err(("unsupported_pijul_version", format!(
             "expected Pijul {PIJUL_VERSION}, found: {version_text}"
         )));
