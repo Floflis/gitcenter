@@ -195,28 +195,35 @@ The exact replication mechanism is an architectural task and must be validated w
 
 ### PIJUL-03 — Repository registration and lifecycle
 
-Split registration into two independently reviewable steps because the ZeroNet browser runtime cannot directly spawn the PIJUL-02 private-pipe process.
+PIJUL-03A defines the metadata/type contract. PIJUL-03B must first validate how a Pijul repository can be initialized in GitCenter's existing ZeroNet storage model. Do not assume a local supervisor or a separate bridge-managed root is necessary merely to create the repository directory.
 
 #### PIJUL-03A — Metadata contract and identification
 
 - Define the signed `content.json` metadata object for Pijul repositories.
-- Keep the Pijul storage identifier relative to the bridge-managed root, never an absolute host path.
 - Validate metadata versions, storage identifier syntax, and native VCS type exclusivity.
 - Identify Pijul repositories without constructing a fake Git/Hg backend.
 - Preserve existing Git/Hg metadata and migration behavior.
+- Treat the current `storage_path` semantics as provisional until PIJUL-03B establishes whether the native repository belongs inside the ZeroNet site tree or in separately managed storage.
 
 **Acceptance:** GitCenter can identify a correctly declared Pijul repository and reject invalid/mixed backend metadata without changing existing repository types. This step does not claim bridge-backed registration.
 
-#### PIJUL-03B — Trusted registration service
+#### PIJUL-03B — Native initialization and storage decision
 
-- Implement a local trusted service/supervisor that owns the bridge process and shared secret.
-- Forward only fixed, authenticated bridge operations over private pipes.
-- Confirm initialization/inspection before writing signed Pijul metadata.
-- Add creation/registration flows, ownership checks, timeout/cancellation, duplicate handling, cleanup, and recovery.
-- Keep secrets and host filesystem paths out of browser-visible code.
+- Audit the existing `ZeroFS` API and GitCenter's direct Git initialization implementation.
+- Generate two empty repositories using the exact pinned Pijul version `1.0.0-beta.24`.
+- Capture and compare their complete `.pijul` trees, file contents, sizes, and hashes.
+- Determine which files are constant, generated, binary, or lock/runtime state.
+- Verify that a proposed empty pristine database fixture can be copied and reopened safely, or identify the minimal native initialization operation required to create it.
+- Prototype writing the verified initial layout through `ZeroFS`, following the existing Git initialization model.
+- Keep Pijul-native operations (pristine access, channels, changes, recording, and transport) separate from filesystem bootstrap.
+- Revisit the metadata schema's storage location only after an in-site versus external-storage prototype is validated.
 
-**Acceptance:** GitCenter can register a real Pijul repository only after successful bridge confirmation and publish metadata signed by the site owner.
+**Acceptance:** GitCenter can create a valid empty Pijul repository in the chosen storage domain, and the exact pinned Pijul binary can reopen and inspect it. No placeholder `pristine/db`, guessed metadata, or unverified historical layout is accepted.
 
+A local supervisor is a possible requirement only if the verified pristine initialization or subsequent native operations require a process/library unavailable to the ZeroNet runtime. It is not a prerequisite assumed for creating `.pijul`.
+
+Research and evidence: `docs/PIJUL-INIT-RESEARCH.md`.
+ 
 ### PIJUL-04 — Channels and code browsing
 
 - List channels and select a channel.
