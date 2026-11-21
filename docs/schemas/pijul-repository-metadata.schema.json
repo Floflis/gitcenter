@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Floflis/gitcenter/blob/main/docs/schemas/pijul-repository-metadata.schema.json",
+  "title": "GitCenter Pijul repository metadata",
+  "description": "Signed content.json metadata identifying a Pijul repository stored outside the ZeroNet site tree.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "storage_path",
+    "pijul_version",
+    "state"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "protocol_version": {
+      "const": 1
+    },
+    "storage_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+    },
+    "pijul_version": {
+      "const": "1.0.0-beta.24"
+    },
+    "state": {
+      "const": "registered"
+    }
+  }
+}
