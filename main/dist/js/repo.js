@@ -142,6 +142,28 @@ class LegacyVcsProvider {
 	}
 }
 
+// Validate signed Pijul metadata before treating a site as a Pijul repository.
+function isValidPijulMetadata(metadata) {
+	if(!metadata || typeof metadata != "object" || Array.isArray(metadata)) {
+		return false;
+	}
+	if(metadata.schema_version != 1 || metadata.protocol_version != 1) {
+		return false;
+	}
+	if(typeof metadata.storage_path != "string" || metadata.storage_path.length == 0) {
+		return false;
+	}
+	// Storage paths are relative identifiers, not arbitrary filesystem paths.
+	if(metadata.storage_path.startsWith("/") || metadata.storage_path.indexOf("\\") != -1) {
+		return false;
+	}
+	let parts = metadata.storage_path.split("/");
+	if(parts.some(part => !part || part == "." || part == ".." || !/^[A-Za-z0-9._-]+$/.test(part))) {
+		return false;
+	}
+	return metadata.state == "registered" && metadata.pijul_version == "1.0.0-beta.24";
+}
+
 class Repository {
 	constructor(address, zeroPage) {
 		this.address = address;
@@ -153,6 +175,8 @@ class Repository {
 		this.issues = new RepositoryIssues(this);
 		// The provider is assigned after the native backend has been initialized.
 		this.provider = null;
+		this.repositoryType = null;
+		this.pijulMetadata = null;
 	}
 
 	// Checks whether file `path` of repository can be signed by current user.
@@ -238,7 +262,28 @@ class Repository {
 			})
 			.then(c => {
 				content = c;
-				if(content.git) {
+				let hasGit = !!content.git;
+				let hasHg = !!content.hg;
+				let hasPijul = typeof content.pijul != "undefined";
+
+				// A repository must declare exactly one native VCS backend.
+				if([hasGit, hasHg, hasPijul].filter(Boolean).length > 1) {
+					return Promise.reject("Repository metadata declares multiple VCS types");
+				}
+
+				if(hasPijul) {
+					if(!isValidPijulMetadata(content.pijul)) {
+						return Promise.reject("Invalid Pijul repository metadata");
+					}
+					this.git = null;
+					this.hg = null;
+					this.vcs = null;
+					this.provider = null;
+					this.repositoryType = "pijul";
+					this.pijulMetadata = content.pijul;
+				} else if(content.git) {
+					this.repositoryType = "git";
+					this.pijulMetadata = null;
 					this.git = new Git("merged-GitCenter/" + this.address + "/" + content.git, zeroPage);
 					this.hg = null;
 					this.vcs = this.git;
@@ -246,6 +291,8 @@ class Repository {
 						this.provider = new LegacyVcsProvider(this, "git", this.git);
 					});
 				} else if(content.hg) {
+					this.repositoryType = "hg";
+					this.pijulMetadata = null;
 					this.git = null;
 					this.hg = new Hg("merged-GitCenter/" + this.address + "/" + content.hg, zeroPage);
 					this.vcs = this.hg;
@@ -253,6 +300,8 @@ class Repository {
 						this.provider = new LegacyVcsProvider(this, "hg", this.hg);
 					});
 				} else {
+					this.repositoryType = null;
+					this.pijulMetadata = null;
 					this.git = null;
 					this.hg = null;
 					this.vcs = null;
@@ -479,7 +528,9 @@ class Repository {
 
 	// Sets up new repository (not fork). Sets title, description, signers.
 	install(title, description, address, type) {
-		if(type == "git") {
+		if(type == "pijul") {
+			return Promise.reject("Pijul registration requires bridge-confirmed repository inspection; the trusted bridge transport is not connected yet");
+		} else if(type == "git") {
 			return this.installGit(title, description, address);
 		} else if(type == "hg") {
 			return this.installHg(title, description, address);
@@ -521,6 +572,8 @@ class Repository {
 			.then(git => {
 				this.git = git;
 				this.vcs = git;
+				this.repositoryType = "git";
+				this.pijulMetadata = null;
 				this.provider = new LegacyVcsProvider(this, "git", git);
 				return this.signContent("site");
 			});
@@ -558,6 +611,8 @@ class Repository {
 			.then(hg => {
 				this.hg = hg;
 				this.vcs = hg;
+				this.repositoryType = "hg";
+				this.pijulMetadata = null;
 				this.provider = new LegacyVcsProvider(this, "hg", hg);
 				return this.signContent("site");
 			});
@@ -604,6 +659,23 @@ class Repository {
 	}
 
 	/********************************* VCS provider actions ********************************/
+
+	// Reports the declared native VCS type without pretending an unavailable
+	// Pijul bridge is an initialized file-browsing provider.
+	getVcsInfo() {
+		if(this.repositoryType == "pijul") {
+			return Promise.resolve({
+				type: "pijul",
+					available: false,
+					metadata: this.pijulMetadata,
+					reason: "bridge_transport_unavailable"
+			});
+		}
+		if(!this.provider) {
+			return Promise.reject("Repository has no initialized VCS provider");
+		}
+		return this.provider.getInfo().then(info => Object.assign({available: true}, info));
+	}
 
 	// Returns list of files in a native VCS view (Git ref or Mercurial view).
 	getFiles(view, dir) {
