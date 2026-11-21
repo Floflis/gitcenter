@@ -105,6 +105,43 @@ function adjustFollowQueries(queries, objects) {
 		.reduce((obj, val) => Object.assign(obj, val), {}); // to object
 }
 
+// Transitional read-side provider boundary. Native VCS semantics remain in each backend.
+// Git refs and Mercurial views are exposed through a neutral UI-facing "view" term.
+class LegacyVcsProvider {
+	constructor(repository, type, backend) {
+		this.repository = repository;
+		this.type = type;
+		this.backend = backend;
+	}
+
+	getInfo() {
+		return Promise.resolve({type: this.type});
+	}
+
+	listViews() {
+		return this.backend.getRefList().then(refs => refs.filter(ref => (
+			ref.indexOf("refs/heads/") == 0 || ref.indexOf("refs/tags/") == 0
+		)));
+	}
+
+	listFiles(view, path) {
+		return this.backend.readBranchCommit(view).then(commit => (
+			this.repository.getTree(commit.content.tree, path)
+		));
+	}
+
+	readFile(view, path) {
+		return this.backend.readBranchCommit(view)
+			.then(commit => this.backend.readTreeItem(commit.content.tree, path))
+			.then(blob => {
+				if(blob.type != "blob") {
+					return Promise.reject("File content must be a blob");
+				}
+				return blob.content;
+			});
+	}
+}
+
 class Repository {
 	constructor(address, zeroPage) {
 		this.address = address;
@@ -114,6 +151,8 @@ class Repository {
 		this.zeroDB = new ZeroDB(zeroPage);
 		this.zeroID = new ZeroID(zeroPage);
 		this.issues = new RepositoryIssues(this);
+		// The provider is assigned after the native backend has been initialized.
+		this.provider = null;
 	}
 
 	// Checks whether file `path` of repository can be signed by current user.
@@ -203,16 +242,21 @@ class Repository {
 					this.git = new Git("merged-GitCenter/" + this.address + "/" + content.git, zeroPage);
 					this.hg = null;
 					this.vcs = this.git;
-					return this.git.init();
+					return this.git.init().then(() => {
+						this.provider = new LegacyVcsProvider(this, "git", this.git);
+					});
 				} else if(content.hg) {
 					this.git = null;
 					this.hg = new Hg("merged-GitCenter/" + this.address + "/" + content.hg, zeroPage);
 					this.vcs = this.hg;
-					return this.hg.init();
+					return this.hg.init().then(() => {
+						this.provider = new LegacyVcsProvider(this, "hg", this.hg);
+					});
 				} else {
 					this.git = null;
 					this.hg = null;
 					this.vcs = null;
+					this.provider = null;
 				}
 			})
 			.then(() => {
@@ -476,6 +520,8 @@ class Repository {
 			})
 			.then(git => {
 				this.git = git;
+				this.vcs = git;
+				this.provider = new LegacyVcsProvider(this, "git", git);
 				return this.signContent("site");
 			});
 	}
@@ -511,6 +557,8 @@ class Repository {
 			})
 			.then(hg => {
 				this.hg = hg;
+				this.vcs = hg;
+				this.provider = new LegacyVcsProvider(this, "hg", hg);
 				return this.signContent("site");
 			});
 	}
@@ -555,14 +603,14 @@ class Repository {
 			});
 	}
 
-	/********************************* Git actions ********************************/
+	/********************************* VCS provider actions ********************************/
 
-	// Returns list of files in directory
-	getFiles(branch, dir) {
-		return this.vcs.readBranchCommit(branch)
-			.then(commit => {
-				return this.getTree(commit.content.tree, dir);
-			});
+	// Returns list of files in a native VCS view (Git ref or Mercurial view).
+	getFiles(view, dir) {
+		if(!this.provider) {
+			return Promise.reject("Repository has no initialized VCS provider");
+		}
+		return this.provider.listFiles(view, dir);
 	}
 
 	// Returns list of files in directory and submodules
@@ -601,31 +649,21 @@ class Repository {
 			});
 	}
 
-	// Returns file content
-	getFile(branch, path) {
-		return this.vcs.readBranchCommit(branch)
-			.then(commit => {
-				return this.vcs.readTreeItem(commit.content.tree, path);
-			})
-			.then(blob => {
-				if(blob.type != "blob") {
-					return Promise.reject("File content must be a blob");
-				}
-
-				return blob.content;
-			});
+	// Returns file content from a native VCS view.
+	getFile(view, path) {
+		if(!this.provider) {
+			return Promise.reject("Repository has no initialized VCS provider");
+		}
+		return this.provider.readFile(view, path);
 	}
 
-	// Returns branch list
+	// Backwards-compatible name retained for existing GitCenter callers.
+	// The provider exposes these as native views, not universal branches.
 	getBranches() {
-		return this.vcs.getRefList()
-			.then(refs => {
-				return refs
-					.filter(ref => (
-						ref.indexOf("refs/heads/") == 0 ||
-						ref.indexOf("refs/tags/") == 0
-					));
-			});
+		if(!this.provider) {
+			return Promise.reject("Repository has no initialized VCS provider");
+		}
+		return this.provider.listViews();
 	}
 
 	// Changes file content. Commits with message `message` on branch `base`
