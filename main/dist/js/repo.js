@@ -262,8 +262,8 @@ class Repository {
 			})
 			.then(c => {
 				content = c;
-				let hasGit = typeof content.git != "undefined";
-				let hasHg = typeof content.hg != "undefined";
+				let hasGit = !!content.git;
+				let hasHg = !!content.hg;
 				let hasPijul = typeof content.pijul != "undefined";
 
 				// A repository must declare exactly one native VCS backend.
@@ -283,6 +283,7 @@ class Repository {
 					this.pijulMetadata = content.pijul;
 				} else if(content.git) {
 					this.repositoryType = "git";
+					this.pijulMetadata = null;
 					this.git = new Git("merged-GitCenter/" + this.address + "/" + content.git, zeroPage);
 					this.hg = null;
 					this.vcs = this.git;
@@ -291,6 +292,7 @@ class Repository {
 					});
 				} else if(content.hg) {
 					this.repositoryType = "hg";
+					this.pijulMetadata = null;
 					this.git = null;
 					this.hg = new Hg("merged-GitCenter/" + this.address + "/" + content.hg, zeroPage);
 					this.vcs = this.hg;
@@ -570,6 +572,8 @@ class Repository {
 			.then(git => {
 				this.git = git;
 				this.vcs = git;
+				this.repositoryType = "git";
+				this.pijulMetadata = null;
 				this.provider = new LegacyVcsProvider(this, "git", git);
 				return this.signContent("site");
 			});
@@ -607,6 +611,8 @@ class Repository {
 			.then(hg => {
 				this.hg = hg;
 				this.vcs = hg;
+				this.repositoryType = "hg";
+				this.pijulMetadata = null;
 				this.provider = new LegacyVcsProvider(this, "hg", hg);
 				return this.signContent("site");
 			});
@@ -653,6 +659,23 @@ class Repository {
 	}
 
 	/********************************* VCS provider actions ********************************/
+
+	// Reports the declared native VCS type without pretending an unavailable
+	// Pijul bridge is an initialized file-browsing provider.
+	getVcsInfo() {
+		if(this.repositoryType == "pijul") {
+			return Promise.resolve({
+				type: "pijul",
+					available: false,
+					metadata: this.pijulMetadata,
+					reason: "bridge_transport_unavailable"
+			});
+		}
+		if(!this.provider) {
+			return Promise.reject("Repository has no initialized VCS provider");
+		}
+		return this.provider.getInfo().then(info => Object.assign({available: true}, info));
+	}
 
 	// Returns list of files in a native VCS view (Git ref or Mercurial view).
 	getFiles(view, dir) {
