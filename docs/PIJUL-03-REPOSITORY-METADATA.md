@@ -4,7 +4,7 @@
 
 This stage defines how GitCenter identifies a Pijul repository in signed site metadata and how the existing application distinguishes it from Git and Mercurial. It does not claim that the trusted bridge is connected to the ZeroNet browser runtime.
 
-The current GitCenter creation flow initializes Git/Hg data inside the merged ZeroNet site tree. PIJUL-02 instead defines a Rust process that owns a separately configured filesystem root and communicates over private stdin/stdout pipes. Those storage domains are not interchangeable.
+The current GitCenter Git implementation creates its repository layout directly through ZeroFS; it does not invoke `git init`. The PIJUL-02 bridge currently uses a separately configured filesystem root, but that implementation choice does not prove that Pijul repositories must live outside the ZeroNet site tree. The storage location remains provisional pending the exact-version ZeroFS initialization experiment documented in `docs/PIJUL-INIT-RESEARCH.md`.
 
 ## Metadata contract
 
@@ -27,7 +27,7 @@ The normative schema is `docs/schemas/pijul-repository-metadata.schema.json`.
 
 - `schema_version` versions this metadata shape independently of the bridge.
 - `protocol_version` identifies the bridge protocol required by this repository.
-- `storage_path` is a portable relative identifier below the bridge's configured managed root. It is not an absolute host path and is not relative to the ZeroNet site directory.
+- `storage_path` is currently a portable relative identifier in the provisional bridge-managed storage design. Its final meaning (ZeroNet site-relative versus bridge-root-relative) is intentionally unresolved until PIJUL-03B validates a real initialization prototype.
 - `pijul_version` records the exact Pijul compatibility target returned by bridge inspection.
 - `state` is `registered` only after a trusted bridge inspection has confirmed the repository.
 
@@ -47,16 +47,11 @@ The current repository loader validates the Pijul metadata shape and records the
 
 ## Registration lifecycle
 
-The intended trusted registration sequence is:
+The final sequence depends on PIJUL-03B's storage experiment. The first candidate is to initialize the verified empty `.pijul` layout through the same ZeroFS storage API that GitCenter already uses for its native Git implementation.
 
-1. The local GitCenter service allocates a storage identifier below its configured Pijul root.
-2. The service asks the bridge to initialize or inspect that repository.
-3. The bridge confirms the repository marker and exact Pijul version.
-4. The service receives structured inspection metadata.
-5. The GitCenter site owner signs and publishes `content.json` containing the Pijul metadata object.
-6. On load, GitCenter validates the signed metadata and identifies the repository as Pijul.
+If the pinned Pijul release requires a native runtime operation to create the pristine database, only that operation should be delegated to a trusted native component. Do not introduce a local supervisor or move all repository data outside the site tree unless the prototype demonstrates that this is necessary.
 
-The browser must never choose an arbitrary host path or claim registration success based only on user-supplied JSON.
+The site owner must sign and publish `content.json` only after the repository has been validated by the exact pinned Pijul implementation. The browser must never choose an arbitrary host path or claim registration success based only on user-supplied JSON.
 
 ## Current implementation status
 
@@ -68,9 +63,9 @@ The browser must never choose an arbitrary host path or claim registration succe
 
 ## Required follow-up: PIJUL-03B
 
-The remaining registration UI and lifecycle operations require a trusted local service/supervisor that launches `gitcenter-pijul`, owns the shared secret, forwards fixed protocol requests over private pipes, and returns authenticated/validated results to the GitCenter application. The browser must not receive the secret or spawn the process.
+PIJUL-03B must first produce and validate an empty `1.0.0-beta.24` fixture and prove whether it can be installed through ZeroFS. The modern upstream format documents a Sanakirja pristine database, so an empty directory tree or placeholder `pristine/db` is not a valid repository.
 
-PIJUL-03B must implement and test that integration before adding a Pijul option to the creation form or writing `state: registered` metadata. It must also define service availability, timeout, cancellation, duplicate registration, cleanup, and recovery behavior.
+Only after that experiment should the project decide whether repository creation needs a native service, whether the repository can live in the ZeroNet site tree, and what `storage_path` means. See `docs/PIJUL-INIT-RESEARCH.md`.
 
 ## Non-goals
 
