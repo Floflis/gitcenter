@@ -195,12 +195,27 @@ The exact replication mechanism is an architectural task and must be validated w
 
 ### PIJUL-03 — Repository registration and lifecycle
 
-- Extend repository metadata with an explicit Pijul repository type and storage location.
-- Add creation/registration flows.
-- Validate repository ownership and filesystem boundaries.
+Split registration into two independently reviewable steps because the ZeroNet browser runtime cannot directly spawn the PIJUL-02 private-pipe process.
+
+#### PIJUL-03A — Metadata contract and identification
+
+- Define the signed `content.json` metadata object for Pijul repositories.
+- Keep the Pijul storage identifier relative to the bridge-managed root, never an absolute host path.
+- Validate metadata versions, storage identifier syntax, and native VCS type exclusivity.
+- Identify Pijul repositories without constructing a fake Git/Hg backend.
 - Preserve existing Git/Hg metadata and migration behavior.
 
-**Acceptance:** GitCenter can register and identify a Pijul repository without changing existing repository types.
+**Acceptance:** GitCenter can identify a correctly declared Pijul repository and reject invalid/mixed backend metadata without changing existing repository types. This step does not claim bridge-backed registration.
+
+#### PIJUL-03B — Trusted registration service
+
+- Implement a local trusted service/supervisor that owns the bridge process and shared secret.
+- Forward only fixed, authenticated bridge operations over private pipes.
+- Confirm initialization/inspection before writing signed Pijul metadata.
+- Add creation/registration flows, ownership checks, timeout/cancellation, duplicate handling, cleanup, and recovery.
+- Keep secrets and host filesystem paths out of browser-visible code.
+
+**Acceptance:** GitCenter can register a real Pijul repository only after successful bridge confirmation and publish metadata signed by the site owner.
 
 ### PIJUL-04 — Channels and code browsing
 
