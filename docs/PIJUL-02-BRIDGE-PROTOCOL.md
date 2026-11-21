@@ -91,7 +91,7 @@ Requires an existing directory containing a real .pijul directory. Returns chann
 
 ## Error codes
 
-invalid_request, unsupported_protocol, unauthorized, missing_repository, invalid_path, path_outside_root, repository_not_found, repository_not_empty, not_a_pijul_repository, unsupported_pijul_version, pijul_unavailable, pijul_command_failed, invalid_pijul_output, and unsupported_operation.
+invalid_request, unsupported_protocol, unauthorized, missing_repository, invalid_path, path_outside_root, repository_not_found, repository_not_empty, filesystem_error, not_a_pijul_repository, unsupported_pijul_version, pijul_unavailable, pijul_command_failed, invalid_pijul_output, and unsupported_operation.
 
 Messages are diagnostic text, not a stable machine interface. Clients must branch on code.
 
