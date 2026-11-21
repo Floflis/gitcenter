@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Authenticated, versioned JSON-lines bridge to a pinned Pijul CLI"
-license = "GPL-2.0-or-later"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
