@@ -4,12 +4,14 @@ This roadmap records planned product capabilities. Items are proposals, not impl
 
 ## Repository experience
 
-- [ ] **Contributors widget**
-  - Contributor avatars, names/identifiers, and contribution counts.
-  - A contribution-activity graph over time.
-  - Separate attribution for commit authors, committers, and co-authors.
-  - Contributor details and time-range filtering.
-  - Git history as the primary source of contribution data.
+- [ ] **Cross-VCS Contributors widget**
+  - Support contributor summaries and activity visualization for Git, Mercurial, and Pijul repositories.
+  - Display contributor avatars, names/identifiers, and contribution counts.
+  - Provide a contribution-activity graph over time.
+  - Separate attribution roles where the source VCS exposes them.
+  - Add the **Humans | AI | All** filter tabs to distinguish human and AI contributions and inspect the combined activity.
+  - Provide contributor details and time-range filtering.
+  - Use native repository history through VCS-specific adapters, normalized into a shared contribution model.
 
 ## Identity and attribution
 
@@ -28,6 +30,7 @@ This roadmap records planned product capabilities. Items are proposals, not impl
 ## Principles
 
 - Never present an identity-to-email declaration as email verification.
-- Preserve the distinction between commit metadata and cryptographically authenticated identity.
+- Preserve the distinction between repository metadata and cryptographically authenticated identity.
+- Do not infer whether a contributor is human or AI from names, avatars, or email strings alone.
 - Make attribution explainable, privacy-conscious, and resistant to misleading claims.
 - Documentation does not imply implementation.
